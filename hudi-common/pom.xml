@@ -227,7 +227,7 @@
       <groupId>org.apache.hbase</groupId>
       <artifactId>hbase-server</artifactId>
       <version>${hbase.version}</version>
-      <!-- Unfortunately, HFile is packaged ONLY under hbase-server --> 
+      <!-- Unfortunately, HFile is packaged ONLY under hbase-server -->
       <scope>compile</scope>
       <exclusions>
         <exclusion>
@@ -254,6 +254,14 @@
       <groupId>org.lz4</groupId>
       <artifactId>lz4-java</artifactId>
       <version>1.8.0</version>
+    </dependency>
+
+
+    <dependency>
+      <groupId>org.apache.directory.api</groupId>
+      <artifactId>api-util</artifactId>
+      <version>1.0.0-M20</version>
+      <scope>test</scope>
     </dependency>
 
   </dependencies>
