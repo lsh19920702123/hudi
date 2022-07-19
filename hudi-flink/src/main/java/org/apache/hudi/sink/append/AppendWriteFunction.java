@@ -30,7 +30,10 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.util.Collector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -43,6 +46,7 @@ import java.util.List;
  * @see StreamWriteOperatorCoordinator
  */
 public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
+  private static final Logger LOG = LoggerFactory.getLogger(AppendWriteFunction.class);
 
   private static final long serialVersionUID = 1L;
 
@@ -102,29 +106,33 @@ public class AppendWriteFunction<I> extends AbstractStreamWriteFunction<I> {
   //  Utilities
   // -------------------------------------------------------------------------
   private void initWriterHelper() {
-    this.currentInstant = instantToWrite(true);
-    if (this.currentInstant == null) {
+    final String instant = instantToWrite(true);
+    if (instant == null) {
       // in case there are empty checkpoints that has no input data
       throw new HoodieException("No inflight instant when flushing data!");
     }
     this.writerHelper = new BulkInsertWriterHelper(this.config, this.writeClient.getHoodieTable(), this.writeClient.getConfig(),
-        this.currentInstant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
+        instant, this.taskID, getRuntimeContext().getNumberOfParallelSubtasks(), getRuntimeContext().getAttemptNumber(),
         this.rowType);
   }
 
   private void flushData(boolean endInput) {
-    if (this.writerHelper == null) {
-      // does not process any inputs, returns early.
-      return;
+    final List<WriteStatus> writeStatus;
+    if (this.writerHelper != null) {
+      writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
+      this.currentInstant = this.writerHelper.getInstantTime();
+    } else {
+      writeStatus = Collections.emptyList();
+      this.currentInstant = instantToWrite(false);
+      LOG.info("No data to write in subtask [{}] for instant [{}]", taskID, this.currentInstant);
     }
-    final List<WriteStatus> writeStatus = this.writerHelper.getWriteStatuses(this.taskID);
     final WriteMetadataEvent event = WriteMetadataEvent.builder()
-        .taskID(taskID)
-        .instantTime(this.writerHelper.getInstantTime())
-        .writeStatus(writeStatus)
-        .lastBatch(true)
-        .endInput(endInput)
-        .build();
+            .taskID(taskID)
+            .instantTime(this.currentInstant)
+            .writeStatus(writeStatus)
+            .lastBatch(true)
+            .endInput(endInput)
+            .build();
     this.eventGateway.sendEventToCoordinator(event);
     // nullify the write helper for next ckp
     this.writerHelper = null;
